@@ -1,0 +1,142 @@
+ACCION Estacion_de_Monitoreo ES
+AMBIENTE
+  Datos = Registro
+    sensor: entero
+    posicion: entero
+    valor: real
+  Fin_Registro
+  CSV: Archivo de Datos
+  Reg: Datos
+
+  Lecturas: Arreglo[1..288] de real
+  sensor_elegido: entero
+
+  // Registros utilizados para funciones a continuacion
+  Par_Posicion_Valor = Registro
+    valor: real
+    posicion: entero
+  Fin_Registro
+  
+  // Procedimientos de la Parte 2
+  PROCEDIMIENTO Carga(sensor_elegido: entero) ES
+    Abrir E(CSV)
+    Leer(CSV, Reg)
+    MIENTRAS NFDA(CSV) HACER
+      SI  Reg.sensor = sensor_elegido ENTONCES
+        Lecturas[Reg.posicion] := Reg.valor
+      FIN_SI
+      Leer(CSV, Reg)
+    FIN_MIENTRAS
+    Cerrar(CSV)
+  FIN_PROCEDIMIENTO
+
+  v_max: Par_Posicion_Valor
+  v_min: Par_Posicion_Valor
+  promedio: real
+  
+  PROCEDIMIENTO Estadisticas(Vector: Arreglo[1..288] de real, n_posiciones: entero) ES
+    v_max.valor := 0
+    v_min.valor := 12.0 // 12.0 Bar es el valor maximo establecido que el sensor puede detectar
+    promedio := 0
+    PARA i := 1 HASTA n_posiciones HACER
+      promedio := promedio + Vector[i]
+      SI Vector[i] > v_max.valor ENTONCES
+        v_max.valor := Vector[i]
+        v_max.posicion := i
+      SINO
+        SI Vector[i] < v_min.valor ENTONCES
+          v_min.valor := Vector[i]
+          v_min.posicion := i
+        FIN_SI
+      FIN_SI
+    FIN_PARA
+    promedio := promedio / n_posiciones
+    ESC("El valor maximo registrado es: ", v_max.valor, " y su posicion es: ", v_max.posicion)
+    ESC("El valor minimo registrado es: ", v_min.valor, " y su posicion es: ", v_min.posicion)
+    ESC("El promedio de todas las lecturas del sensor es de: ", promedio)
+  FIN_PROCEDIMIENTO
+  
+  Posicion_Umbral_Simple: entero
+  
+  PROCEDIMIENTO Busqueda_por_umbral(Vector: Arreglo[1..288] de real, umbral_max: real, umbral_min: real) ES
+    AMBIENTE
+      i: entero
+    PROCESO
+      i := 1
+      MIENTRAS (Vector[i] < umbral_max Y Vector[i] > umbral_min) Y (i <= 288) HACER
+        i := i + 1 // Si 'i' llega a 289 significa que recorrió todo el arreglo y no hay valor que supere el umbral
+      FIN_MIENTRAS
+      SI i > 288 ENTONCES
+        Posicion_Umbral_Simple := 0
+        ESC("No se ha encontradó ningún valor que supere el umbral maximo de ", umbral_max, "o el minimo de ", umbral_min)
+      SINO 
+        Posicion_Umbral_Simple := i
+        SI Vector[i] > umbral_max ENTONCES
+          ESC("La posicion del primer valor anomalo por superar el umbral maximo de ", umbral_max, " es: ", Posicion_Umbral_Simple)
+        SINO
+          ESC("La posicion del primer valor anomalo por superar el umbral minimo de ", umbral_min, " es: ", Posicion_Umbral_Simple)
+        FIN_SI
+      FIN_SI
+  FIN_PROCEDIMIENTO
+  
+  Posicion_Umbral_Racha: entero
+
+  PROCEDIMIENTO Deteccion_de_racha(Vector: Arreglo[1..288] de real, umbral_max: real, umbral_min: real, longitud: entero) ES
+    AMBIENTE
+      i, racha: entero
+    PROCESO
+      i := 1
+      racha := 0
+      MIENTRAS (racha < longitud) Y (i <= 288) HACER 
+        SI Vector[i] > umbral_max O Vector < umbral_min ENTONCES
+          racha := racha + 1
+        SINO
+          racha := 0
+        FIN_SI
+        i := i + 1
+      FIN_MIENTRAS
+      SI racha >= longitud ENTONCES
+        Posicion_Umbral_Racha := i - longitud - 1 // Como en el mientras i siempre se suma en uno, aún despues de encontrar la racha se volverá a sumar en 1 y quedará [longitud + 1] posiciones desplazado
+        ESC("La posicion de la primera racha de longitud ", longitud, " que supera los parametros normales entre ", umbral_min, " y ", umbral_max, " es: ", Posicion_Umbral_Racha)
+      SINO 
+        Posicion_Umbral_Racha := 0
+        ESC("No se ha encontradó ninguna racha de valores de longitud ", longitud, " que exceda los parametros normales de funcionamiento ")
+      FIN_SI
+  FIN_PROCEDIMIENTO
+
+  
+  // Parte 3
+  
+  Matriz: Arreglo[1..5,1..288] de real
+  
+  PROCEDIMIENTO Carga_Matriz() ES
+    Abrir E(CSV)
+    Leer(CSV, Reg)
+    MIENTRAS NFDA(CSV) HACER
+      Matriz[Reg.sensor, Reg.posicion] := Reg.valor
+      Leer(CSV, Reg)
+    FIN_MIENTRAS
+    Cerrar(CSV)
+  FIN_PROCEDIMIENTO
+  
+  PROCEDIMIENTO Extraer_Fila(Matriz: Arreglo[1..5,1..288] de real, sensor: entero, Vector: Arreglo[1..288] de real) ES
+    PARA i := 1 HASTA 288 HACER
+      Vector[i] := Matriz[sensor, i]
+    FIN_PARA
+    Lecturas := Vector
+  FIN_PROCEDIMIENTO
+
+  promedioPorSensor: Arreglo[1..5] de real
+  
+PROCESO
+  Carga_Matriz()
+  PARA M := 1 HASTA 5 HACER
+    ESC("Sensor ", M, ": ")
+    Extraer_Fila(Matriz, M, Lecturas)
+    Estadisticas(Lecturas, 288)
+    promedioPorSensor[M] := promedio
+    ESC(" ")
+  FIN_PARA
+  ESC("Estadisticas de los promedios por sensor:")
+  Estadisticas(promedioPorSensor, 5)
+FIN_ACCION 
